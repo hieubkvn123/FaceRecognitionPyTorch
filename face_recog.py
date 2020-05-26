@@ -28,6 +28,7 @@ net = cv2.dnn.readNetFromCaffe(prototxt, caffe_model)
 print("[INFO] Loading recognizer model ...")
 model = TripletLossNet()
 model = torch.load('pytorch_embedder.pb')
+model.eval()
 
 known_faces = list()
 known_names = list()
@@ -99,7 +100,7 @@ def lumination_correct(img):
 
     return bgr
 
-def recognize(img, tolerance = 2.0):
+def recognize(img, tolerance = 2.2):
     label = "Unkown"
     global model # load the model from outside
     # first, generate the embedding of this face
@@ -111,18 +112,20 @@ def recognize(img, tolerance = 2.0):
 
     outputs = model(face)
     outputs = outputs.detach().numpy()[0] # the validating vector
-    #outputs = standardize(outputs)
+    # outputs = standardize(outputs)
 
     # now compare to the known faces
-    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=tolerance)
+    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=14)
 
     distances = face_recognition.face_distance(known_faces, outputs)
+    print(distances)
+    distances = distances / sum(distances)
     best_match = np.argmin(distances)
     # print(distances)
-
+    
     if(matches[best_match]):
         cosine_sim = 1 - cosine(known_faces[best_match], outputs)
-        print(cosine_sim)
+        #print(cosine_sim)
         if(cosine_sim >= 0.98):
             label = known_names[best_match]
 

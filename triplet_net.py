@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 
-EMBEDDING_SIZE = 64
+EMBEDDING_SIZE = 128
 
 class TripletLossNet(nn.Module):
   def __init__(self):
