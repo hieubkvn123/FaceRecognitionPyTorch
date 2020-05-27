@@ -74,7 +74,7 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 
         embedding = model(face)
         embedding = embedding.detach().numpy()[0]
-        #embedding = standardize(embedding)
+        embedding = standardize(embedding)
 
         label = file.split(".")[0]
         known_faces.append(embedding)
@@ -112,21 +112,21 @@ def recognize(img, tolerance = 2.2):
 
     outputs = model(face)
     outputs = outputs.detach().numpy()[0] # the validating vector
-    # outputs = standardize(outputs)
+    outputs = standardize(outputs)
 
     # now compare to the known faces
     matches = face_recognition.compare_faces(known_faces, outputs, tolerance=14)
 
     distances = face_recognition.face_distance(known_faces, outputs)
-    print(distances)
+    #print(distances)
     distances = distances / sum(distances)
     best_match = np.argmin(distances)
     # print(distances)
     
     if(matches[best_match]):
         cosine_sim = 1 - cosine(known_faces[best_match], outputs)
-        #print(cosine_sim)
-        if(cosine_sim >= 0.98):
+        # print(cosine_sim)
+        if(cosine_sim >= 0.995):
             label = known_names[best_match]
 
     return label
@@ -154,7 +154,7 @@ while(True):
         label = recognize(face)
 
         cv2.rectangle(frame, (startX, startY), (endX, endY), (0,255,0), 2)
-        cv2.putText(frame, label, (startX,startY), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+        cv2.putText(frame, label, (startX,startY), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,0,255), 2)
 
     frame = imutils.resize(frame, width=1000)
     cv2.imshow("Frame", frame)
