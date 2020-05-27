@@ -126,11 +126,13 @@ def recognize(img, tolerance = 2.2):
     if(matches[best_match]):
         cosine_sim = 1 - cosine(known_faces[best_match], outputs)
         # print(cosine_sim)
-        if(cosine_sim >= 0.995):
+        if(cosine_sim >= 0.93):
             label = known_names[best_match]
 
     return label
 
+print("-------------------------------------------------")
+print("[INFO] Running recognition app ... ")
 while(True):
     frame = vs.read()
     # frame = lumination_correct(frame)
