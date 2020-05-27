@@ -10,10 +10,23 @@ from triplet_net import TripletLossNet
 from scipy.spatial.distance import cosine
 from imutils.video import WebcamVideoStream
 
+from argparse import ArgumentParser
+
+parser = ArgumentParser()
+parser.add_argument("-v", "--video", required = False, help = "Path to input video")
+
+args = vars(parser.parse_args())
+
 HEIGHT, WIDTH, CHANNELS = 128, 128, 3
 
 print("[INFO] Starting camera stream ... ")
-vs = WebcamVideoStream(src=0).start()
+
+video = False
+if(args['video'] == None):
+    vs = WebcamVideoStream(src=0).start()
+else:
+    vs = cv2.VideoCapture(args['video'])
+    video = True
 
 print("[INFO] Warming up the camera ... ")
 time.sleep(2.0)
@@ -58,7 +71,7 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 
         for i in range(detections.shape[2]):
             confidence = detections[0,0,i,2]
-            if(confidence < 0.5):
+            if(confidence < 0.8):
                 continue
 
             box = np.array([W,H,W,H]) * detections[0,0,i,3:7]
@@ -115,17 +128,17 @@ def recognize(img, tolerance = 0.5):
     outputs = standardize(outputs)
 
     # now compare to the known faces
-    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=1.5)
+    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.5)
 
     distances = face_recognition.face_distance(known_faces, outputs)
-    # print(distances)
+    print(distances)
     distances = distances / sum(distances)
     best_match = np.argmin(distances)
     
     if(matches[best_match]):
         cosine_sim = 1 - cosine(known_faces[best_match], outputs)
         # print(cosine_sim)
-        if(cosine_sim >= 0.93):
+        if(cosine_sim >= 0.99):
             label = known_names[best_match]
 
     return label
@@ -133,7 +146,10 @@ def recognize(img, tolerance = 0.5):
 print("-------------------------------------------------")
 print("[INFO] Running recognition app ... ")
 while(True):
-    frame = vs.read()
+    if(not video):
+        frame = vs.read()
+    else:
+        ret, frame = vs.read()
     # frame = lumination_correct(frame)
     (H, W) = frame.shape[:2]
 
@@ -165,5 +181,11 @@ while(True):
     if(key == ord("q")):
         break
 
-vs.stop()
+if(not video):
+    vs.stop()
+else: 
+    vs.release()
+
 cv2.destroyAllWindows()
+print("-------------------------------------------------")
+print("[INFO] App stopped ...")
