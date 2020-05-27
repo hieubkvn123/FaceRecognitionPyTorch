@@ -100,7 +100,7 @@ def lumination_correct(img):
 
     return bgr
 
-def recognize(img, tolerance = 2.2):
+def recognize(img, tolerance = 0.5):
     label = "Unkown"
     global model # load the model from outside
     # first, generate the embedding of this face
@@ -115,13 +115,12 @@ def recognize(img, tolerance = 2.2):
     outputs = standardize(outputs)
 
     # now compare to the known faces
-    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=14)
+    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=1.5)
 
     distances = face_recognition.face_distance(known_faces, outputs)
-    #print(distances)
+    # print(distances)
     distances = distances / sum(distances)
     best_match = np.argmin(distances)
-    # print(distances)
     
     if(matches[best_match]):
         cosine_sim = 1 - cosine(known_faces[best_match], outputs)
