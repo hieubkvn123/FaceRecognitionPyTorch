@@ -128,11 +128,11 @@ def recognize(img, tolerance = 0.5):
     outputs = standardize(outputs)
 
     # now compare to the known faces
-    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.5)
+    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=2.0)
 
     distances = face_recognition.face_distance(known_faces, outputs)
-    print(distances)
-    distances = distances / sum(distances)
+    # print(distances)
+    # distances = distances / sum(distances)
     best_match = np.argmin(distances)
     
     if(matches[best_match]):
