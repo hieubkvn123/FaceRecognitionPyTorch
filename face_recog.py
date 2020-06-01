@@ -55,6 +55,9 @@ def standardize(a):
 
     a_std = (a - mean)/std
 
+    # then normalize the vector : v = v / ||v||
+    # length = np.linalg.norm(a)
+
     return a_std
 
 for (dir, dirs, files) in os.walk(DATA_DIR):
@@ -118,7 +121,8 @@ def recognize(img, tolerance = 0.5):
     global model # load the model from outside
     # first, generate the embedding of this face
     # resize image to the size of network's input shape
-    face = cv2.resize(img, (WIDTH, HEIGHT))
+    face = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    face = cv2.resize(face, (WIDTH, HEIGHT))
 
     face = np.array([face])
     face = torch.Tensor(face).reshape(1, CHANNELS, HEIGHT, WIDTH)
@@ -128,17 +132,18 @@ def recognize(img, tolerance = 0.5):
     outputs = standardize(outputs)
 
     # now compare to the known faces
-    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=2.0)
+    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=1.5)
+
 
     distances = face_recognition.face_distance(known_faces, outputs)
-    # print(distances)
+    print(distances)
     # distances = distances / sum(distances)
     best_match = np.argmin(distances)
     
     if(matches[best_match]):
         cosine_sim = 1 - cosine(known_faces[best_match], outputs)
         # print(cosine_sim)
-        if(cosine_sim >= 0.99):
+        if(cosine_sim >= 0.90):
             label = known_names[best_match]
 
     return label

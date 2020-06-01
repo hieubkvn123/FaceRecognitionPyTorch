@@ -19,6 +19,7 @@ print("[INFO] Reading detection model ... ")
 net = cv2.dnn.readNetFromCaffe("deploy.prototxt", "dnn_model.caffemodel")
 
 captured = False
+num_captured = 0
 while(True):
     frame = vs.read()
 
@@ -27,19 +28,25 @@ while(True):
     net.setInput(blob)
     detections = net.forward()
 
+    num_faces = 0
+
     for i in range(detections.shape[2]):
         confidence = detections[0,0,i,2]
 
         if(confidence < 0.5):
             continue
         else:
+            num_faces += 1
             box = np.array([W,H,W,H]) * detections[0,0,i,3:7]
             (startX, startY, endX, endY) = box.astype("int")
 
             cv2.rectangle(frame, (startX, startY), (endX, endY), (0,255,0), 2)
 
     if(captured):
-        cv2.putText(frame, "Image has been captured", (20,20), \
+        if(num_faces == 1 and num_captured < 20):
+            cv2.imwrite(DATA_DIR + name + ".jpg", frame)
+            num_captured += 1
+        cv2.putText(frame, "Image has been captured | num frames : " + str(num_captured), (20,20), \
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
 
     cv2.imshow("Frame",frame)
@@ -48,7 +55,9 @@ while(True):
     if(key == ord("q")):
         break
     elif(key == ord("s")):
-        cv2.imwrite(DATA_DIR + name + ".jpg", frame)
+        # cv2.imwrite(DATA_DIR + name + ".jpg", frame)
+        # os.mkdir()
+        # modify so that each person has 20 frames
         captured = True
 
 vs.stop()
