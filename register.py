@@ -43,9 +43,6 @@ while(True):
             cv2.rectangle(frame, (startX, startY), (endX, endY), (0,255,0), 2)
 
     if(captured):
-        if(num_faces == 1 and num_captured < 20):
-            cv2.imwrite(DATA_DIR + name + ".jpg", frame)
-            num_captured += 1
         cv2.putText(frame, "Image has been captured | num frames : " + str(num_captured), (20,20), \
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
 
@@ -55,7 +52,7 @@ while(True):
     if(key == ord("q")):
         break
     elif(key == ord("s")):
-        # cv2.imwrite(DATA_DIR + name + ".jpg", frame)
+        cv2.imwrite(DATA_DIR + name + ".jpg", frame)
         # os.mkdir()
         # modify so that each person has 20 frames
         captured = True
