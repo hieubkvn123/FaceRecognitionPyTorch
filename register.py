@@ -33,7 +33,7 @@ while(True):
     for i in range(detections.shape[2]):
         confidence = detections[0,0,i,2]
 
-        if(confidence < 0.5):
+        if(confidence < 0.7):
             continue
         else:
             num_faces += 1

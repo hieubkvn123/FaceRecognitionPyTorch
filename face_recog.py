@@ -95,7 +95,7 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 
         embedding = model(face)
         embedding = embedding.detach().numpy()[0]
-        embedding = standardize(embedding)
+        #embedding = standardize(embedding)
         embedding = normalize(embedding)
 
         label = file.split(".")[0]
@@ -135,11 +135,11 @@ def recognize(img, tolerance = 0.5):
 
     outputs = model(face)
     outputs = outputs.detach().numpy()[0] # the validating vector
-    outputs = standardize(outputs)
+    #outputs = standardize(outputs)
     outputs = normalize(outputs)
 
     # now compare to the known faces
-    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.2)
+    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.12)
 
 
     distances = face_recognition.face_distance(known_faces, outputs)
@@ -150,7 +150,7 @@ def recognize(img, tolerance = 0.5):
     if(matches[best_match]):
         cosine_sim = 1 - cosine(known_faces[best_match], outputs)
         # print(cosine_sim)
-        if(cosine_sim >= 0.97):
+        if(cosine_sim >= 0.99):
             label = known_names[best_match]
 
     return label
