@@ -69,6 +69,7 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
     for file in files:
         abs_path = DATA_DIR + file
         img = cv2.imread(abs_path)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         (H, W) = img.shape[:2]
 
         # detect the face inside the image
@@ -82,6 +83,7 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
             if(confidence < 0.8):
                 continue
 
+            print("hihi")
             box = np.array([W,H,W,H]) * detections[0,0,i,3:7]
             (startX, startY, endX, endY) = box.astype("int")
             face = img[startY:endY,startX:endX]
@@ -89,14 +91,17 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
             print("    [INFO] Face detected at " + str(abs_path))
 
 
+        cv2.imshow("Face", face)
+        cv2.waitKey(0)
+
         face = cv2.resize(face, (WIDTH, HEIGHT))
         face = np.array([face])
         face = torch.Tensor(face).reshape(1, CHANNELS, HEIGHT, WIDTH)
 
         embedding = model(face)
         embedding = embedding.detach().numpy()[0]
-        # embedding = standardize(embedding)
-        # embedding = normalize(embedding)
+        #embedding = standardize(embedding)
+        embedding = normalize(embedding)
 
         label = file.split(".")[0]
         known_faces.append(embedding)
@@ -122,36 +127,54 @@ def lumination_correct(img):
 
     return bgr
 
+def cross_validate(enc, known_enc):
+    dist = known_enc - enc 
+    dist = np.delete(dist, 0)
+
+    dist = np.sort(dist)
+    min_dist = dist[0]
+
+    return min_dist
+
 def recognize(img, tolerance = 0.5):
     label = "Unkown"
     global model # load the model from outside
     # first, generate the embedding of this face
     # resize image to the size of network's input shape
     face = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    face = cv2.resize(face, (WIDTH, HEIGHT))
+    face = cv2.resize(img, (WIDTH, HEIGHT))
+
+    cv2.imshow("Face_", face)
+    cv2.waitKey(0)
 
     face = np.array([face])
     face = torch.Tensor(face).reshape(1, CHANNELS, HEIGHT, WIDTH)
 
     outputs = model(face)
     outputs = outputs.detach().numpy()[0] # the validating vector
-    # outputs = standardize(outputs)
-    # outputs = normalize(outputs)
+    #outputs = standardize(outputs)
+    outputs = normalize(outputs)
 
     # now compare to the known faces
-    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=6.0)
+    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.1)
 
 
     distances = face_recognition.face_distance(known_faces, outputs)
-    # print(distances)
+    print(distances)
     # distances = distances / sum(distances)
     best_match = np.argmin(distances)
     
     if(matches[best_match]):
         cosine_sim = 1 - cosine(known_faces[best_match], outputs)
-        print(cosine_sim)
+        #print(cosine_sim)
+        #mean_dist = np.mean(distances)
+        #min_dist = cross_validate(distances[best_match], distances)
+        #if(distances[best_match] > 1.5 * mean_dist):
+        #    label = known_names[best_match]
+        #else:
         if(cosine_sim >= 0.95):
             label = known_names[best_match]
+            
 
     return label
 
