@@ -9,7 +9,7 @@ vs = WebcamVideoStream(src = 0).start()
 print("[INPUT] Enter your name : ", end="")
 name = input()
 
-DATA_DIR = 'faces/'
+DATA_DIR = 'faces/' + name + "/"
 if(not os.path.exists(DATA_DIR)):
     print("[INFO] Data directory does not exist, creating .. ")
     os.mkdir(DATA_DIR)
@@ -21,6 +21,7 @@ net = cv2.dnn.readNetFromCaffe("deploy.prototxt", "dnn_model.caffemodel")
 captured = False
 num_captured = 0
 while(True):
+    FACE_DETECTED  = False
     frame = vs.read()
 
     (H, W) = frame.shape[:2]
@@ -36,6 +37,7 @@ while(True):
         if(confidence < 0.7):
             continue
         else:
+            FACE_DETECTED = True
             num_faces += 1
             box = np.array([W,H,W,H]) * detections[0,0,i,3:7]
             (startX, startY, endX, endY) = box.astype("int")
@@ -43,8 +45,13 @@ while(True):
             cv2.rectangle(frame, (startX, startY), (endX, endY), (0,255,0), 2)
 
     if(captured):
-        cv2.putText(frame, "Image has been captured | num frames : " + str(num_captured), (20,20), \
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+        if(FACE_DETECTED):
+            if(num_captured < 20):
+                cv2.imwrite(DATA_DIR + name + "_" + str(num_captured) + ".jpg", frame)
+                num_captured += 1
+
+            cv2.putText(frame, "Image has been captured | num frames : " + str(num_captured), (20,20), \
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
 
     cv2.imshow("Frame",frame)
 
@@ -52,7 +59,7 @@ while(True):
     if(key == ord("q")):
         break
     elif(key == ord("s")):
-        cv2.imwrite(DATA_DIR + name + ".jpg", frame)
+        cv2.imwrite(DATA_DIR + name + "_0.jpg", frame)
         # os.mkdir()
         # modify so that each person has 20 frames
         captured = True

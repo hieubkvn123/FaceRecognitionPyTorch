@@ -5,10 +5,14 @@ import time
 import imutils
 import numpy as np
 import face_recognition
+import matplotlib.pyplot as plt
 
 from triplet_net import TripletLossNet
 from scipy.spatial.distance import cosine
 from imutils.video import WebcamVideoStream
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.decomposition import PCA
 
 from argparse import ArgumentParser
 
@@ -43,6 +47,9 @@ model = TripletLossNet()
 model = torch.load('pytorch_embedder.pb', map_location=torch.device('cpu'))
 model.eval()
 
+# include a classifier
+clf = SVC(kernel='rbf', C = 2.0, gamma='auto', probability=True)
+
 known_faces = list()
 known_names = list()
 
@@ -66,49 +73,63 @@ def standardize(a):
     return a_std
 
 for (dir, dirs, files) in os.walk(DATA_DIR):
-    for file in files:
-        abs_path = DATA_DIR + file
-        img = cv2.imread(abs_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        (H, W) = img.shape[:2]
+    if(dir != DATA_DIR or dir == DATA_DIR):
+        for file in files:
+            abs_path = dir + "/" + file
+            img = cv2.imread(abs_path)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            (H, W) = img.shape[:2]
 
-        # detect the face inside the image
-        blob = cv2.dnn.blobFromImage(img, 1.0, (300,300), [104,111,123])
-        net.setInput(blob)
-        detections = net.forward()
-        face = None
+            # detect the face inside the image
+            blob = cv2.dnn.blobFromImage(img, 1.0, (300,300), [104,111,123])
+            net.setInput(blob)
+            detections = net.forward()
+            face = None
 
-        for i in range(detections.shape[2]):
-            confidence = detections[0,0,i,2]
-            if(confidence < 0.8):
-                continue
+            for i in range(detections.shape[2]):
+                confidence = detections[0,0,i,2]
+                if(confidence < 0.8):
+                    continue
 
-            print("hihi")
-            box = np.array([W,H,W,H]) * detections[0,0,i,3:7]
-            (startX, startY, endX, endY) = box.astype("int")
-            face = img[startY:endY,startX:endX]
+                box = np.array([W,H,W,H]) * detections[0,0,i,3:7]
+                (startX, startY, endX, endY) = box.astype("int")
+                face = img[startY:endY,startX:endX]
 
-            print("    [INFO] Face detected at " + str(abs_path))
+                print("    [INFO] Face detected at " + str(abs_path))
 
 
-        cv2.imshow("Face", face)
-        cv2.waitKey(0)
+            # cv2.imshow("Face", face)
+            #cv2.waitKey(0)
 
-        face = cv2.resize(face, (WIDTH, HEIGHT))
-        face = np.array([face])
-        face = torch.Tensor(face).reshape(1, CHANNELS, HEIGHT, WIDTH)
+            face = cv2.resize(face, (WIDTH, HEIGHT))
+            face = np.array([face])
+            face = torch.Tensor(face).reshape(1, CHANNELS, HEIGHT, WIDTH)
 
-        embedding = model(face)
-        embedding = embedding.detach().numpy()[0]
-        #embedding = standardize(embedding)
-        embedding = normalize(embedding)
+            embedding = model(face)
+            embedding = embedding.detach().numpy()[0]
+            embedding = standardize(embedding)
+            #embedding = normalize(embedding)
 
-        label = file.split(".")[0]
-        known_faces.append(embedding)
-        known_names.append(label)
+            label = file.split(".")[0]
+            label = label.split("_")[0]
+            known_faces.append(embedding)
+            known_names.append(label)
 
 known_faces = np.array(known_faces)
-known_names = np.array(known_names)
+# known_names = np.array(known_names)
+
+print(known_names)
+
+pca = PCA(n_components = 2)
+out = pca.fit_transform(known_faces)
+
+x = out[:,0]
+y = out[:,1]
+
+plt.scatter(x, y)
+plt.show()
+
+clf.fit(known_faces, known_names)
 
 # neutralizes the lumination of the image
 def lumination_correct(img):
@@ -136,7 +157,7 @@ def cross_validate(enc, known_enc):
 
     return min_dist
 
-def recognize(img, tolerance = 0.5):
+def recognize(img, tolerance = 0.1):
     label = "Unkown"
     global model # load the model from outside
     # first, generate the embedding of this face
@@ -144,19 +165,19 @@ def recognize(img, tolerance = 0.5):
     face = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     face = cv2.resize(img, (WIDTH, HEIGHT))
 
-    cv2.imshow("Face_", face)
-    cv2.waitKey(0)
+    # cv2.imshow("Face_", face)
+    # cv2.waitKey(0)
 
     face = np.array([face])
     face = torch.Tensor(face).reshape(1, CHANNELS, HEIGHT, WIDTH)
 
     outputs = model(face)
     outputs = outputs.detach().numpy()[0] # the validating vector
-    #outputs = standardize(outputs)
-    outputs = normalize(outputs)
+    outputs = standardize(outputs)
+    #outputs = normalize(outputs)
 
     # now compare to the known faces
-    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.1)
+    matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.8)
 
 
     distances = face_recognition.face_distance(known_faces, outputs)
@@ -174,8 +195,13 @@ def recognize(img, tolerance = 0.5):
         #else:
         if(cosine_sim >= 0.95):
             label = known_names[best_match]
-            
+        
+    '''
+    label = clf.predict(np.array([outputs]))
+    proba = clf.predict_proba(np.array([outputs]))
 
+    label = label[0] + " - {0:.1f}%".format(proba[0][np.argmax(proba[0])]*100)
+    '''
     return label
 
 print("-------------------------------------------------")
