@@ -4,6 +4,7 @@ import torch
 import pickle
 import time
 import imutils
+import threading
 import numpy as np
 import insightface
 import face_recognition
@@ -73,7 +74,7 @@ def standardize(a):
 
     return a_std
 
-if(not os.path.exists("faces_arc.pickle") or not os.path.exists("labels_arc.pickl")):
+if(not os.path.exists("faces_arc.pickle") or not os.path.exists("labels_arc.pickle")):
     for (dir, dirs, files) in os.walk(DATA_DIR):
         if(dir != DATA_DIR or dir == DATA_DIR):
             for file in files:
@@ -133,6 +134,8 @@ PROCESS_FRAME = True
 face_locations = []
 names = []
 
+
+
 while(True):
     frame = vs.read()
     (H, W) = frame.shape[:2]
@@ -159,6 +162,7 @@ while(True):
 
             face = frame[startY:endY, startX:endX]
             face = cv2.resize(face, (IMG_WIDTH, IMG_HEIGHT))
+            face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
             emb = model.get_embedding(face)
             emb = normalize(emb)
 
