@@ -50,9 +50,9 @@ model = torch.load('pytorch_embedder.pb', map_location=torch.device('cpu'))
 model.eval()
 
 # include a classifier
-clf = SVC(kernel='poly', C = 1.0, class_weight='balanced', probability=True)
-#clf = LinearDiscriminantAnalysis(n_components=16)
-#clf = LinearSVC()
+#clf = SVC(kernel='rbf', C = 1.0, class_weight='balanced', probability=True, gamma='auto')
+#clf = LinearDiscriminantAnalysis(n_components=2)
+clf = LinearSVC()
 
 known_faces = list()
 known_names = list()
@@ -76,100 +76,6 @@ def standardize(a):
 
 	return a_std
 
-for (dir, dirs, files) in os.walk(DATA_DIR):
-	if(dir != DATA_DIR or dir == DATA_DIR):
-		for file in files:
-			abs_path = dir + "/" + file
-			img = cv2.imread(abs_path)
-			img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-			img2 = cv2.resize(img, (0,0), fx=0.5,fy=0.5)
-			(H, W) = img.shape[:2]
-
-			# detect the face inside the image
-			blob = cv2.dnn.blobFromImage(img, 1.0, (300,300), [104,111,123])
-			net.setInput(blob)
-			detections = net.forward()
-			face = None
-			face3 = None
-
-			for i in range(detections.shape[2]):
-				confidence = detections[0,0,i,2]
-				if(confidence < 0.8):
-					continue
-
-				box = np.array([W,H,W,H]) * detections[0,0,i,3:7]
-				(startX, startY, endX, endY) = box.astype("int")
-				face = img[startY:endY,startX:endX]
-
-				box2 = np.array([W/2,H/2,W/2,H/2])*detections[0,0,i,3:7]
-				(startX, startY, endX, endY) = box2.astype("int")
-				face3 = img2[startY:endY,startX:endX]
-
-				print("    [INFO] Face detected at " + str(abs_path))
-
-
-			# cv2.imshow("Face", face)
-			#cv2.waitKey(0)
-
-			face1 = cv2.resize(face, (WIDTH, HEIGHT))
-			face1 = np.array([face1])
-			face1 = torch.Tensor(face1).reshape(1, CHANNELS, HEIGHT, WIDTH)
-
-			embedding = model(face1)
-			embedding = embedding.detach().numpy()[0]
-			#embedding = standardize(embedding)
-			embedding = normalize(embedding)
-
-			label = file.split(".")[0]
-			label = label.split("_")[0]
-			known_faces.append(embedding)
-			known_names.append(label)
-
-			face2 = cv2.resize(cv2.flip(face, flipCode=1), (WIDTH, HEIGHT))
-			face2 = np.array([face2])
-			face2 = torch.Tensor(face2).reshape(1, CHANNELS, HEIGHT, WIDTH)
-
-			embedding = model(face2)
-			embedding = embedding.detach().numpy()[0]
-			#embedding = standardize(embedding)
-			embedding = normalize(embedding)
-
-			label = file.split(".")[0]
-			label = label.split("_")[0]
-			known_faces.append(embedding)
-			known_names.append(label)
-
-			face3 = cv2.resize(face3, (WIDTH, HEIGHT))
-			face3 = np.array([face3])
-			face3 = torch.Tensor(face3).reshape(1, CHANNELS, HEIGHT, WIDTH)
-
-			embedding = model(face3)
-			embedding = embedding.detach().numpy()[0]
-			#embedding = standardize(embedding)
-			embedding = normalize(embedding)
-
-			label = file.split(".")[0]
-			label = label.split("_")[0]
-			known_faces.append(embedding)
-			known_names.append(label)
-
-
-known_faces = np.array(known_faces)
-# known_names = np.array(known_names)
-
-print(known_names)
-
-pca = PCA(n_components = 2)
-out = pca.fit_transform(known_faces)
-
-x = out[:,0]
-y = out[:,1]
-
-plt.scatter(x, y)
-plt.show()
-
-clf.fit(known_faces, known_names)
-
 # neutralizes the lumination of the image
 def lumination_correct(img):
 	lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
@@ -187,6 +93,108 @@ def lumination_correct(img):
 
 	return bgr
 
+for (dir, dirs, files) in os.walk(DATA_DIR):
+	if(dir != DATA_DIR or dir == DATA_DIR):
+		for file in files:
+			abs_path = dir + "/" + file
+			img = cv2.imread(abs_path)
+			#img = lumination_correct(img)
+			img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+			img2 = cv2.resize(img, (0,0), fx=0.5,fy=0.5)
+			(H, W) = img.shape[:2]
+
+			# detect the face inside the image
+			blob = cv2.dnn.blobFromImage(img, 1.0, (300,300), [104,111,123])
+			net.setInput(blob)
+			detections = net.forward()
+			face = None
+			face3 = None
+			num_faces = 0
+
+			for i in range(detections.shape[2]):
+				confidence = detections[0,0,i,2]
+				if(confidence < 0.5):
+					continue
+
+				num_faces += 1
+				box = np.array([W,H,W,H]) * detections[0,0,i,3:7]
+				(startX, startY, endX, endY) = box.astype("int")
+				face = img[startY:endY,startX:endX]
+
+				box2 = np.array([W/2,H/2,W/2,H/2])*detections[0,0,i,3:7]
+				(startX, startY, endX, endY) = box2.astype("int")
+				face3 = img2[startY:endY,startX:endX]
+
+				print("    [INFO] Face detected at " + str(abs_path))
+
+
+			# cv2.imshow("Face", face)
+			#cv2.waitKey(0)
+			if(num_faces == 0): continue
+			face1 = cv2.resize(face, (WIDTH, HEIGHT))
+			face1 = np.array([face1])
+			face1 = torch.Tensor(face1).reshape(1, CHANNELS, HEIGHT, WIDTH)
+
+			embedding = model(face1)
+			embedding = embedding.detach().numpy()[0]
+			embedding = normalize(embedding)
+			embedding = standardize(embedding)
+			
+			label = file.split(".")[0]
+			label = label.split("_")[0]
+			known_faces.append(embedding)
+			known_names.append(label)
+			
+			face2 = cv2.resize(cv2.flip(face, flipCode=1), (WIDTH, HEIGHT))
+			face2 = np.array([face2])
+			face2 = torch.Tensor(face2).reshape(1, CHANNELS, HEIGHT, WIDTH)
+
+			embedding = model(face2)
+			embedding = embedding.detach().numpy()[0]
+			embedding = normalize(embedding)
+			embedding = standardize(embedding)
+
+			label = file.split(".")[0]
+			label = label.split("_")[0]
+			known_faces.append(embedding)
+			known_names.append(label)
+
+			face3 = cv2.resize(face3, (WIDTH, HEIGHT))
+			face3 = np.array([face3])
+			face3 = torch.Tensor(face3).reshape(1, CHANNELS, HEIGHT, WIDTH)
+
+			embedding = model(face3)
+			embedding = embedding.detach().numpy()[0]
+			embedding = normalize(embedding)
+			embedding = standardize(embedding)
+
+			label = file.split(".")[0]
+			label = label.split("_")[0]
+			known_faces.append(embedding)
+			known_names.append(label)
+
+
+known_faces = np.array(known_faces)
+# known_names = np.array(known_names)
+
+print(known_names)
+
+pca = PCA(n_components = 2)
+out = pca.fit_transform(known_faces)
+
+for label in np.unique(known_names):
+	cluster = out[np.where(known_names == label)]
+	x = cluster[:,0]
+	y = cluster[:,1]
+
+	print(x)
+
+	plt.scatter(x, y)
+
+plt.show()
+
+clf.fit(known_faces, known_names)
+
 def cross_validate(enc, known_enc):
 	dist = known_enc - enc 
 	dist = np.delete(dist, 0)
@@ -201,6 +209,7 @@ def recognize(img, tolerance = 0.1):
 	global model # load the model from outside
 	# first, generate the embedding of this face
 	# resize image to the size of network's input shape
+	#face = lumination_correct(img)
 	face = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 	face = cv2.resize(face, (WIDTH, HEIGHT))
 
@@ -212,13 +221,12 @@ def recognize(img, tolerance = 0.1):
 
 	outputs = model(face)
 	outputs = outputs.detach().numpy()[0] # the validating vector
-	#outputs = standardize(outputs)
 	outputs = normalize(outputs)
+	outputs = standardize(outputs)
 
-	
 	# now compare to the known faces
-	'''
-	matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.5)
+	
+	matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.2)
 
 
 	distances = face_recognition.face_distance(known_faces, outputs)
@@ -226,7 +234,7 @@ def recognize(img, tolerance = 0.1):
 	# distances = distances / sum(distances)
 	best_match = np.argmin(distances)
 	
-	
+	label = 'Unkown'
 	if(matches[best_match]):
 		cosine_sim = 1 - cosine(known_faces[best_match], outputs)
 		#print(cosine_sim)
@@ -235,24 +243,29 @@ def recognize(img, tolerance = 0.1):
 		#if(distances[best_match] > 1.5 * mean_dist):
 		#    label = known_names[best_match]
 		#else:
-		if(cosine_sim >= 0.95):
+		if(cosine_sim >= 0.99):
 			label = known_names[best_match]
 		
-	'''
-	label = clf.predict(np.array([outputs]))
-	proba = clf.predict_proba(np.array([outputs]))
+	label_ = str(clf.predict(np.array([outputs]))[0])
 
-	label = label[0] + " - {0:.1f}%".format(proba[0][np.argmax(proba[0])]*100)
+	_label_ = 'Unkown'
+	if(label == label_):
+		_label_ = label
+	#proba = clf.predict_proba(np.array([outputs]))
+
+	#label = label[0] + " - {0:.1f}%".format(proba[0][np.argmax(proba[0])]*100)
 	
-	return label
+	return _label_
 
 print("-------------------------------------------------")
 print("[INFO] Running recognition app ... ")
 while(True):
 	if(not video):
 		frame = vs.read()
+		frame = cv2.flip(frame, flipCode=1)
 	else:
 		ret, frame = vs.read()
+
 	# frame = lumination_correct(frame)
 	(H, W) = frame.shape[:2]
 
