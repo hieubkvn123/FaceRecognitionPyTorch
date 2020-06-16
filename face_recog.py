@@ -8,6 +8,7 @@ import face_recognition
 import matplotlib.pyplot as plt
 
 from triplet_net import TripletLossNet
+from arcface_net import ArcFaceNet
 from scipy.spatial.distance import cosine
 from imutils.video import WebcamVideoStream
 from sklearn.ensemble import RandomForestClassifier
@@ -45,8 +46,8 @@ net = cv2.dnn.readNetFromCaffe(prototxt, caffe_model)
 
 # loading recognizer model
 print("[INFO] Loading recognizer model ...")
-model = TripletLossNet()
-model = torch.load('pytorch_embedder.pb', map_location=torch.device('cpu'))
+model = ArcFaceNet()
+model = torch.load('arcface_pytorch.pt', map_location=torch.device('cpu'))
 model.eval()
 
 # include a classifier
@@ -137,8 +138,9 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 
 			embedding = model(face1)
 			embedding = embedding.detach().numpy()[0]
-			embedding = normalize(embedding)
-			embedding = standardize(embedding)
+			#embedding = normalize(embedding)
+			#embedding = standardize(embedding)
+			embedding = embedding / np.linalg.norm(embedding)
 			
 			label = file.split(".")[0]
 			label = label.split("_")[0]
@@ -151,8 +153,9 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 
 			embedding = model(face2)
 			embedding = embedding.detach().numpy()[0]
-			embedding = normalize(embedding)
-			embedding = standardize(embedding)
+			#embedding = normalize(embedding)
+			#embedding = standardize(embedding)
+			embedding = embedding / np.linalg.norm(embedding)
 
 			label = file.split(".")[0]
 			label = label.split("_")[0]
@@ -165,8 +168,9 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 
 			embedding = model(face3)
 			embedding = embedding.detach().numpy()[0]
-			embedding = normalize(embedding)
-			embedding = standardize(embedding)
+			#embedding = normalize(embedding)
+			#embedding = standardize(embedding)
+			embedding = embedding / np.linalg.norm(embedding)
 
 			label = file.split(".")[0]
 			label = label.split("_")[0]
@@ -175,7 +179,7 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 
 
 known_faces = np.array(known_faces)
-# known_names = np.array(known_names)
+known_names = np.array(known_names)
 
 print(known_names)
 
@@ -221,12 +225,13 @@ def recognize(img, tolerance = 0.1):
 
 	outputs = model(face)
 	outputs = outputs.detach().numpy()[0] # the validating vector
-	outputs = normalize(outputs)
-	outputs = standardize(outputs)
+	#outputs = normalize(outputs)
+	#outputs = standardize(outputs)
+	outputs = outputs / np.linalg.norm(outputs)
 
 	# now compare to the known faces
 	
-	matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.2)
+	matches = face_recognition.compare_faces(known_faces, outputs, tolerance=1.0)
 
 
 	distances = face_recognition.face_distance(known_faces, outputs)
@@ -243,19 +248,19 @@ def recognize(img, tolerance = 0.1):
 		#if(distances[best_match] > 1.5 * mean_dist):
 		#    label = known_names[best_match]
 		#else:
-		if(cosine_sim >= 0.99):
-			label = known_names[best_match]
+		#if(cosine_sim >= 0.80):
+		label = known_names[best_match]
 		
-	label_ = str(clf.predict(np.array([outputs]))[0])
+	#label_ = str(clf.predict(np.array([outputs]))[0])
 
-	_label_ = 'Unkown'
-	if(label == label_):
-		_label_ = label
+	#_label_ = 'Unkown'
+	#if(label == label_):
+	#	_label_ = label
 	#proba = clf.predict_proba(np.array([outputs]))
 
 	#label = label[0] + " - {0:.1f}%".format(proba[0][np.argmax(proba[0])]*100)
 	
-	return _label_
+	return label
 
 print("-------------------------------------------------")
 print("[INFO] Running recognition app ... ")
