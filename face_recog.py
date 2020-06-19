@@ -7,8 +7,11 @@ import numpy as np
 import face_recognition
 import matplotlib.pyplot as plt
 
+### All the custom modules ### 
 from triplet_net import TripletLossNet
 from arcface_net import ArcFaceNet
+from face_align  import align 
+
 from scipy.spatial.distance import cosine
 from imutils.video import WebcamVideoStream
 from sklearn.ensemble import RandomForestClassifier
@@ -237,6 +240,11 @@ def recognize(img, tolerance = 1.0):
 
 print("-------------------------------------------------")
 print("[INFO] Running recognition app ... ")
+
+PROCESS_FRAME = True
+face_locations = list()
+face_names = list()
+
 while(True):
 	if(not video):
 		frame = vs.read()
@@ -245,30 +253,39 @@ while(True):
 
 	(H, W) = frame.shape[:2]
 
-	# convert image to blob for detection
-	blob = cv2.dnn.blobFromImage(frame, 1.0, (300,300), (104,111.0,123.0))
-	net.setInput(blob)
-	detections = net.forward()
+	if(PROCESS_FRAME):
+		face_locations = list()
+		face_names = list()
+		# convert image to blob for detection
+		blob = cv2.dnn.blobFromImage(frame, 1.0, (300,300), (104,111.0,123.0))
+		net.setInput(blob)
+		detections = net.forward()
 
-	for i in range(detections.shape[2]):
-		confidence = detections[0,0,i,2]
+		for i in range(detections.shape[2]):
+			confidence = detections[0,0,i,2]
 
-		if(confidence < 0.5):
-			continue
+			if(confidence < 0.5):
+				continue
 
-		box = np.array([W,H,W,H]) * detections[0,0,i,3:7]
-		(startX, startY, endX, endY) = box.astype("int")
+			box = np.array([W,H,W,H]) * detections[0,0,i,3:7]
+			(startX, startY, endX, endY) = box.astype("int")
+			face_locations.append((startX, startY, endX, endY))
 
-		face = frame[max(startY,0):min(endY,H), max(startX,0):min(endX,W)]
-		label, point = recognize(face, tolerance = 0.6)
+			face = frame[max(startY,0):min(endY,H), max(startX,0):min(endX,W)]
+			label, point = recognize(face, tolerance = 0.6)
+			face_names.append(label)
 
-		ax.scatter3D(point[:,0], point[:,1], point[:,2], color='brown', alpha=1.0)
+			ax.scatter3D(point[:,0], point[:,1], point[:,2], color='brown', alpha=0.3)
+			
+			
+	for (startX, startY, endX, endY), label in zip(face_locations, face_names):
 		cv2.rectangle(frame, (startX, startY), (endX, endY), (0,255,0), 2)
 		cv2.putText(frame, label, (startX,startY), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,0,255), 2)
 
+	PROCESS_FRAME = not PROCESS_FRAME
 	frame = imutils.resize(frame, width=1000)
-	cv2.imshow("Frame", frame)
 
+	cv2.imshow("Frame", frame)
 	key = cv2.waitKey(1)
 
 	if(key == ord("q")):
