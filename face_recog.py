@@ -47,7 +47,7 @@ net = cv2.dnn.readNetFromCaffe(prototxt, caffe_model)
 # loading recognizer model
 print("[INFO] Loading recognizer model ...")
 model = ArcFaceNet()
-model = torch.load('pytorch_embedder.pb', map_location=torch.device('cpu'))
+model.load_state_dict(torch.load('arcface_pytorch.pt', map_location=torch.device('cpu')))
 model.eval()
 
 # include a classifier
@@ -140,7 +140,7 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 			embedding = embedding.detach().numpy()[0]
 			embedding = normalize(embedding)
 			#embedding = standardize(embedding)
-			#embedding = embedding / (np.linalg.norm(embedding)**0.5)
+			embedding = embedding / (np.linalg.norm(embedding)**0.5)
 			
 			label = file.split(".")[0]
 			label = label.split("_")[0]
@@ -155,7 +155,7 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 			embedding = embedding.detach().numpy()[0]
 			embedding = normalize(embedding)
 			#embedding = standardize(embedding)
-			#embedding = embedding / (np.linalg.norm(embedding)**0.5)
+			embedding = embedding / (np.linalg.norm(embedding)**0.5)
 
 			label = file.split(".")[0]
 			label = label.split("_")[0]
@@ -170,7 +170,7 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 			embedding = embedding.detach().numpy()[0]
 			embedding = normalize(embedding)
 			#embedding = standardize(embedding)
-			#embedding = embedding / (np.linalg.norm(embedding)**0.5)
+			embedding = embedding / (np.linalg.norm(embedding)**0.5)
 
 			label = file.split(".")[0]
 			label = label.split("_")[0]
@@ -229,11 +229,11 @@ def recognize(img, tolerance = 0.1):
 	point = pca.transform([outputs])
 
 	#outputs = standardize(outputs)
-	# outputs = outputs / (np.linalg.norm(outputs)**0.5)
+	outputs = outputs / (np.linalg.norm(outputs)**0.5)
 
 	# now compare to the known faces
 	
-	matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.01)
+	matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.3)
 
 
 	distances = face_recognition.face_distance(known_faces, outputs)
@@ -269,7 +269,7 @@ print("[INFO] Running recognition app ... ")
 while(True):
 	if(not video):
 		frame = vs.read()
-		frame = cv2.flip(frame, flipCode=1)
+		frame = cv2.flip(frame, flipCode=0)
 	else:
 		ret, frame = vs.read()
 

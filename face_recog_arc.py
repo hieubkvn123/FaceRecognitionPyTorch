@@ -138,6 +138,7 @@ names = []
 
 while(True):
     frame = vs.read()
+    frame = cv2.flip(frame, flipCode=0)
     (H, W) = frame.shape[:2]
 
     if(PROCESS_FRAME):
