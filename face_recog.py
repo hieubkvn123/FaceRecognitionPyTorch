@@ -47,7 +47,7 @@ net = cv2.dnn.readNetFromCaffe(prototxt, caffe_model)
 # loading recognizer model
 print("[INFO] Loading recognizer model ...")
 model = ArcFaceNet()
-model = torch.load('arcface_pytorch.pt', map_location=torch.device('cpu'))
+model = torch.load('pytorch_embedder.pb', map_location=torch.device('cpu'))
 model.eval()
 
 # include a classifier
@@ -138,9 +138,9 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 
 			embedding = model(face1)
 			embedding = embedding.detach().numpy()[0]
-			#embedding = normalize(embedding)
+			embedding = normalize(embedding)
 			#embedding = standardize(embedding)
-			embedding = embedding / np.linalg.norm(embedding)
+			#embedding = embedding / (np.linalg.norm(embedding)**0.5)
 			
 			label = file.split(".")[0]
 			label = label.split("_")[0]
@@ -153,9 +153,9 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 
 			embedding = model(face2)
 			embedding = embedding.detach().numpy()[0]
-			#embedding = normalize(embedding)
+			embedding = normalize(embedding)
 			#embedding = standardize(embedding)
-			embedding = embedding / np.linalg.norm(embedding)
+			#embedding = embedding / (np.linalg.norm(embedding)**0.5)
 
 			label = file.split(".")[0]
 			label = label.split("_")[0]
@@ -168,9 +168,9 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 
 			embedding = model(face3)
 			embedding = embedding.detach().numpy()[0]
-			#embedding = normalize(embedding)
+			embedding = normalize(embedding)
 			#embedding = standardize(embedding)
-			embedding = embedding / np.linalg.norm(embedding)
+			#embedding = embedding / (np.linalg.norm(embedding)**0.5)
 
 			label = file.split(".")[0]
 			label = label.split("_")[0]
@@ -183,19 +183,18 @@ known_names = np.array(known_names)
 
 print(known_names)
 
-pca = PCA(n_components = 2)
+pca = PCA(n_components = 3)
 out = pca.fit_transform(known_faces)
+ax = plt.axes(projection='3d')
 
 for label in np.unique(known_names):
 	cluster = out[np.where(known_names == label)]
 	x = cluster[:,0]
 	y = cluster[:,1]
+	z = cluster[:,2]
 
-	print(x)
 
-	plt.scatter(x, y)
-
-plt.show()
+	ax.scatter3D(x, y, z, alpha=0.3, label=label)
 
 clf.fit(known_faces, known_names)
 
@@ -211,6 +210,7 @@ def cross_validate(enc, known_enc):
 def recognize(img, tolerance = 0.1):
 	label = "Unkown"
 	global model # load the model from outside
+	global pca
 	# first, generate the embedding of this face
 	# resize image to the size of network's input shape
 	#face = lumination_correct(img)
@@ -225,13 +225,15 @@ def recognize(img, tolerance = 0.1):
 
 	outputs = model(face)
 	outputs = outputs.detach().numpy()[0] # the validating vector
-	#outputs = normalize(outputs)
+	outputs = normalize(outputs)
+	point = pca.transform([outputs])
+
 	#outputs = standardize(outputs)
-	outputs = outputs / np.linalg.norm(outputs)
+	# outputs = outputs / (np.linalg.norm(outputs)**0.5)
 
 	# now compare to the known faces
 	
-	matches = face_recognition.compare_faces(known_faces, outputs, tolerance=1.0)
+	matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.01)
 
 
 	distances = face_recognition.face_distance(known_faces, outputs)
@@ -239,7 +241,7 @@ def recognize(img, tolerance = 0.1):
 	# distances = distances / sum(distances)
 	best_match = np.argmin(distances)
 	
-	label = 'Unkown'
+	label = 'Unknown'
 	if(matches[best_match]):
 		cosine_sim = 1 - cosine(known_faces[best_match], outputs)
 		#print(cosine_sim)
@@ -248,8 +250,8 @@ def recognize(img, tolerance = 0.1):
 		#if(distances[best_match] > 1.5 * mean_dist):
 		#    label = known_names[best_match]
 		#else:
-		#if(cosine_sim >= 0.80):
-		label = known_names[best_match]
+		if(cosine_sim >= 0.99):
+			label = known_names[best_match]
 		
 	#label_ = str(clf.predict(np.array([outputs]))[0])
 
@@ -260,7 +262,7 @@ def recognize(img, tolerance = 0.1):
 
 	#label = label[0] + " - {0:.1f}%".format(proba[0][np.argmax(proba[0])]*100)
 	
-	return label
+	return label, point
 
 print("-------------------------------------------------")
 print("[INFO] Running recognition app ... ")
@@ -289,8 +291,9 @@ while(True):
 		(startX, startY, endX, endY) = box.astype("int")
 
 		face = frame[max(startY,0):min(endY,H), max(startX,0):min(endX,W)]
-		label = recognize(face)
+		label, point = recognize(face)
 
+		ax.scatter3D(point[:,0], point[:,1], point[:,2], color='brown', alpha=1.0)
 		cv2.rectangle(frame, (startX, startY), (endX, endY), (0,255,0), 2)
 		cv2.putText(frame, label, (startX,startY), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,0,255), 2)
 
@@ -308,5 +311,8 @@ else:
 	vs.release()
 
 cv2.destroyAllWindows()
+plt.legend()
+plt.show()
+
 print("-------------------------------------------------")
 print("[INFO] App stopped ...")
