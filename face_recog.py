@@ -38,13 +38,13 @@ else:
 print("[INFO] Warming up the camera ... ")
 time.sleep(2.0)
 
-# loading dnn model
+### loading dnn model for detection ###
 print("[INFO] Loading detection model ...")
 prototxt = 'deploy.prototxt'
 caffe_model = 'dnn_model.caffemodel'
 net = cv2.dnn.readNetFromCaffe(prototxt, caffe_model)
 
-# loading recognizer model
+### loading recognizer model ###
 print("[INFO] Loading recognizer model ...")
 model = ArcFaceNet()
 model.load_state_dict(torch.load('arcface_pytorch.pt', map_location=torch.device('cpu')))
@@ -53,7 +53,7 @@ model.eval()
 # include a classifier
 #clf = SVC(kernel='rbf', C = 1.0, class_weight='balanced', probability=True, gamma='auto')
 #clf = LinearDiscriminantAnalysis(n_components=2)
-clf = LinearSVC()
+# clf = LinearSVC()
 
 known_faces = list()
 known_names = list()
@@ -61,46 +61,68 @@ known_names = list()
 DATA_DIR = 'faces/'
 print("[INFO] Loading known faces ... ")
 
-def normalize(a):
-	length = np.linalg.norm(a)
-	a_norm = a/length
-	return a_norm
+def preprocessing_encoding(enc, operation='normalize'):
+	def normalize(a):
+		length = np.linalg.norm(a)
+		a_norm = a/length
+		return a_norm
 
-def standardize(a):
-	mean = a.mean()
-	std = a.std()
+	def standardize(a):
+		mean = a.mean()
+		std = a.std()
 
-	a_std = (a - mean)/std
+		a_std = (a - mean)/std
+		return a_std
 
-	# then normalize the vector : v = v / ||v||
-	# length = np.linalg.norm(a)
+	if(operation == 'standardize'):
+		enc = standardize(enc)
+	elif(operation == 'normalize'):
+		enc = normalize(enc)
 
-	return a_std
+	return enc 
 
-# neutralizes the lumination of the image
-def lumination_correct(img):
-	lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-	l, a, b = cv2.split(lab)
+def preprocessing_image(img, operation = 'rgb', width=128, height=128):
+	# neutralizes the lumination of the image
+	img = cv2.resize(img, (width, height))
 
-	# applying histogram equalization to the l-channel
-	clahe = cv2.createCLAHE(clipLimit = 3.0, tileGridSize=(8,8))
-	l_clahe = clahe.apply(l)
+	def lumination_correct(img):
+		lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+		l, a, b = cv2.split(lab)
 
-	# merge the image again
-	lab_clahe = cv2.merge((l_clahe, a, b))
+		# applying histogram equalization to the l-channel
+		clahe = cv2.createCLAHE(clipLimit = 3.0, tileGridSize=(8,8))
+		l_clahe = clahe.apply(l)
 
-	# convert back to bgr
-	bgr = cv2.cvtColor(lab_clahe, cv2.COLOR_LAB2BGR)
+		# merge the image again
+		lab_clahe = cv2.merge((l_clahe, a, b))
 
-	return bgr
+		# convert back to bgr
+		bgr = cv2.cvtColor(lab_clahe, cv2.COLOR_LAB2BGR)
 
+		return bgr
+
+	final = img
+	if(operation == 'rgb'):
+		final = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+	elif(operation == 'lab'):
+		final = lumination_correct(img)
+	elif(operation == 'gray'):
+		gray = lambda x : [np.mean(x), np.mean(x), np.mean(x)]
+		final = [gray(x) for x in img]
+
+	return final
+
+### Define the operations on images and vectors ###
+img_preprocessing = lambda img : preprocessing_image(img, operation='lab', width=WIDTH, height=HEIGHT)
+vec_preprocessing = lambda vec : preprocessing_encoding(vec, operation = 'normalize')
+
+
+### Loading sample images and generating vectors ###
 for (dir, dirs, files) in os.walk(DATA_DIR):
 	if(dir != DATA_DIR or dir == DATA_DIR):
 		for file in files:
 			abs_path = dir + "/" + file
 			img = cv2.imread(abs_path)
-			#img = lumination_correct(img)
-			img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 			img2 = cv2.resize(img, (0,0), fx=0.5,fy=0.5)
 			(H, W) = img.shape[:2]
 
@@ -128,49 +150,31 @@ for (dir, dirs, files) in os.walk(DATA_DIR):
 
 				print("    [INFO] Face detected at " + str(abs_path))
 
-
-			# cv2.imshow("Face", face)
-			#cv2.waitKey(0)
 			if(num_faces == 0): continue
-			face1 = cv2.resize(face, (WIDTH, HEIGHT))
+			
+			### First augmentation ### 
+			face1 = img_preprocessing(face) # cv2.resize(face, (WIDTH, HEIGHT))
 			face1 = np.array([face1])
 			face1 = torch.Tensor(face1).reshape(1, CHANNELS, HEIGHT, WIDTH)
 
 			embedding = model(face1)
 			embedding = embedding.detach().numpy()[0]
-			embedding = normalize(embedding)
-			#embedding = standardize(embedding)
-			embedding = embedding / (np.linalg.norm(embedding)**0.5)
+			embedding = vec_preprocessing(embedding)
 			
 			label = file.split(".")[0]
 			label = label.split("_")[0]
 			known_faces.append(embedding)
 			known_names.append(label)
 			
-			face2 = cv2.resize(cv2.flip(face, flipCode=1), (WIDTH, HEIGHT))
-			face2 = np.array([face2])
-			face2 = torch.Tensor(face2).reshape(1, CHANNELS, HEIGHT, WIDTH)
 
-			embedding = model(face2)
-			embedding = embedding.detach().numpy()[0]
-			embedding = normalize(embedding)
-			#embedding = standardize(embedding)
-			embedding = embedding / (np.linalg.norm(embedding)**0.5)
-
-			label = file.split(".")[0]
-			label = label.split("_")[0]
-			known_faces.append(embedding)
-			known_names.append(label)
-
-			face3 = cv2.resize(face3, (WIDTH, HEIGHT))
+			### Second augmentation ### 
+			face3 = img_preprocessing(face3)
 			face3 = np.array([face3])
 			face3 = torch.Tensor(face3).reshape(1, CHANNELS, HEIGHT, WIDTH)
 
 			embedding = model(face3)
 			embedding = embedding.detach().numpy()[0]
-			embedding = normalize(embedding)
-			#embedding = standardize(embedding)
-			embedding = embedding / (np.linalg.norm(embedding)**0.5)
+			embedding = vec_preprocessing(embedding)
 
 			label = file.split(".")[0]
 			label = label.split("_")[0]
@@ -185,6 +189,8 @@ print(known_names)
 
 pca = PCA(n_components = 3)
 out = pca.fit_transform(known_faces)
+out /= np.linalg.norm(out, axis=1, keepdims=True)
+
 ax = plt.axes(projection='3d')
 
 for label in np.unique(known_names):
@@ -196,71 +202,36 @@ for label in np.unique(known_names):
 
 	ax.scatter3D(x, y, z, alpha=0.3, label=label)
 
-clf.fit(known_faces, known_names)
+# clf.fit(known_faces, known_names)
 
-def cross_validate(enc, known_enc):
-	dist = known_enc - enc 
-	dist = np.delete(dist, 0)
-
-	dist = np.sort(dist)
-	min_dist = dist[0]
-
-	return min_dist
-
-def recognize(img, tolerance = 0.1):
+def recognize(img, tolerance = 1.0):
 	label = "Unkown"
 	global model # load the model from outside
 	global pca
-	# first, generate the embedding of this face
-	# resize image to the size of network's input shape
-	#face = lumination_correct(img)
-	face = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-	face = cv2.resize(face, (WIDTH, HEIGHT))
-
-	# cv2.imshow("Face_", face)
-	# cv2.waitKey(0)
-
+	face = img_preprocessing(img)
 	face = np.array([face])
 	face = torch.Tensor(face).reshape(1, CHANNELS, HEIGHT, WIDTH)
 
 	outputs = model(face)
 	outputs = outputs.detach().numpy()[0] # the validating vector
-	outputs = normalize(outputs)
+	outputs = vec_preprocessing(outputs)
 	point = pca.transform([outputs])
-
-	#outputs = standardize(outputs)
-	outputs = outputs / (np.linalg.norm(outputs)**0.5)
+	point /= np.linalg.norm(point)
 
 	# now compare to the known faces
 	
-	matches = face_recognition.compare_faces(known_faces, outputs, tolerance=0.3)
+	matches = face_recognition.compare_faces(known_faces, outputs, tolerance=tolerance)
 
 
 	distances = face_recognition.face_distance(known_faces, outputs)
 	print(distances)
-	# distances = distances / sum(distances)
 	best_match = np.argmin(distances)
 	
 	label = 'Unknown'
 	if(matches[best_match]):
 		cosine_sim = 1 - cosine(known_faces[best_match], outputs)
-		#print(cosine_sim)
-		#mean_dist = np.mean(distances)
-		#min_dist = cross_validate(distances[best_match], distances)
-		#if(distances[best_match] > 1.5 * mean_dist):
-		#    label = known_names[best_match]
-		#else:
 		if(cosine_sim >= 0.99):
 			label = known_names[best_match]
-		
-	#label_ = str(clf.predict(np.array([outputs]))[0])
-
-	#_label_ = 'Unkown'
-	#if(label == label_):
-	#	_label_ = label
-	#proba = clf.predict_proba(np.array([outputs]))
-
-	#label = label[0] + " - {0:.1f}%".format(proba[0][np.argmax(proba[0])]*100)
 	
 	return label, point
 
@@ -269,11 +240,9 @@ print("[INFO] Running recognition app ... ")
 while(True):
 	if(not video):
 		frame = vs.read()
-		frame = cv2.flip(frame, flipCode=0)
 	else:
 		ret, frame = vs.read()
 
-	# frame = lumination_correct(frame)
 	(H, W) = frame.shape[:2]
 
 	# convert image to blob for detection
@@ -291,7 +260,7 @@ while(True):
 		(startX, startY, endX, endY) = box.astype("int")
 
 		face = frame[max(startY,0):min(endY,H), max(startX,0):min(endX,W)]
-		label, point = recognize(face)
+		label, point = recognize(face, tolerance = 0.6)
 
 		ax.scatter3D(point[:,0], point[:,1], point[:,2], color='brown', alpha=1.0)
 		cv2.rectangle(frame, (startX, startY), (endX, endY), (0,255,0), 2)
