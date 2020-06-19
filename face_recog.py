@@ -1,6 +1,7 @@
 import os
 import cv2
 import torch
+import pickle
 import time
 import imutils
 import numpy as np
@@ -31,6 +32,13 @@ HEIGHT, WIDTH, CHANNELS = 128, 128, 3
 
 print("[INFO] Starting camera stream ... ")
 
+
+IMG_PREPROCESSING_METHOD = 'lab'
+VEC_PREPROCESSING_METHOD = 'normalize'
+FACE_FILE_HEADER = 'faces_' + IMG_PREPROCESSING_METHOD + "_" + VEC_PREPROCESSING_METHOD + ".pickle"
+LABL_FILE_HEADER = 'labels_' + IMG_PREPROCESSING_METHOD + "_" + VEC_PREPROCESSING_METHOD + ".pickle"
+
+### Video or camera stream ###
 video = False
 if(args['video'] == None):
 	vs = WebcamVideoStream(src=0).start()
@@ -56,7 +64,7 @@ model.eval()
 # include a classifier
 #clf = SVC(kernel='rbf', C = 1.0, class_weight='balanced', probability=True, gamma='auto')
 #clf = LinearDiscriminantAnalysis(n_components=2)
-# clf = LinearSVC()
+clf = LinearSVC()
 
 known_faces = list()
 known_names = list()
@@ -116,77 +124,86 @@ def preprocessing_image(img, operation = 'rgb', width=128, height=128):
 	return final
 
 ### Define the operations on images and vectors ###
-img_preprocessing = lambda img : preprocessing_image(img, operation='lab', width=WIDTH, height=HEIGHT)
-vec_preprocessing = lambda vec : preprocessing_encoding(vec, operation = 'normalize')
+img_preprocessing = lambda img : preprocessing_image(img, operation=IMG_PREPROCESSING_METHOD, width=WIDTH, height=HEIGHT)
+vec_preprocessing = lambda vec : preprocessing_encoding(vec, operation = VEC_PREPROCESSING_METHOD)
 
 
 ### Loading sample images and generating vectors ###
-for (dir, dirs, files) in os.walk(DATA_DIR):
-	if(dir != DATA_DIR or dir == DATA_DIR):
-		for file in files:
-			abs_path = dir + "/" + file
-			img = cv2.imread(abs_path)
-			img2 = cv2.resize(img, (0,0), fx=0.5,fy=0.5)
-			(H, W) = img.shape[:2]
+### If the known faces and known labels are not loaded ###
+if(not os.path.exists(FACE_FILE_HEADER) or not os.path.exists(LABL_FILE_HEADER)):
+	for (dir, dirs, files) in os.walk(DATA_DIR):
+		if(dir != DATA_DIR or dir == DATA_DIR):
+			for file in files:
+				abs_path = dir + "/" + file
+				img = cv2.imread(abs_path)
+				img2 = cv2.resize(img, (0,0), fx=0.5,fy=0.5)
+				(H, W) = img.shape[:2]
 
-			# detect the face inside the image
-			blob = cv2.dnn.blobFromImage(img, 1.0, (300,300), [104,111,123])
-			net.setInput(blob)
-			detections = net.forward()
-			face = None
-			face3 = None
-			num_faces = 0
+				# detect the face inside the image
+				blob = cv2.dnn.blobFromImage(img, 1.0, (300,300), [104,111,123])
+				net.setInput(blob)
+				detections = net.forward()
+				face = None
+				face3 = None
+				num_faces = 0
 
-			for i in range(detections.shape[2]):
-				confidence = detections[0,0,i,2]
-				if(confidence < 0.5):
-					continue
+				for i in range(detections.shape[2]):
+					confidence = detections[0,0,i,2]
+					if(confidence < 0.5):
+						continue
 
-				num_faces += 1
-				box = np.array([W,H,W,H]) * detections[0,0,i,3:7]
-				(startX, startY, endX, endY) = box.astype("int")
-				face = img[startY:endY,startX:endX]
+					num_faces += 1
+					box = np.array([W,H,W,H]) * detections[0,0,i,3:7]
+					(startX, startY, endX, endY) = box.astype("int")
+					face = img[startY:endY,startX:endX]
 
-				box2 = np.array([W/2,H/2,W/2,H/2])*detections[0,0,i,3:7]
-				(startX, startY, endX, endY) = box2.astype("int")
-				face3 = img2[startY:endY,startX:endX]
+					box2 = np.array([W/2,H/2,W/2,H/2])*detections[0,0,i,3:7]
+					(startX, startY, endX, endY) = box2.astype("int")
+					face3 = img2[startY:endY,startX:endX]
 
-				print("    [INFO] Face detected at " + str(abs_path))
+					print("    [INFO] Face detected at " + str(abs_path))
 
-			if(num_faces == 0): continue
-			
-			### First augmentation ### 
-			face1 = img_preprocessing(face) # cv2.resize(face, (WIDTH, HEIGHT))
-			face1 = np.array([face1])
-			face1 = torch.Tensor(face1).reshape(1, CHANNELS, HEIGHT, WIDTH)
+				if(num_faces == 0): continue
+				
+				### First augmentation ### 
+				face1 = img_preprocessing(face) # cv2.resize(face, (WIDTH, HEIGHT))
+				face1 = np.array([face1])
+				face1 = torch.Tensor(face1).reshape(1, CHANNELS, HEIGHT, WIDTH)
 
-			embedding = model(face1)
-			embedding = embedding.detach().numpy()[0]
-			embedding = vec_preprocessing(embedding)
-			
-			label = file.split(".")[0]
-			label = label.split("_")[0]
-			known_faces.append(embedding)
-			known_names.append(label)
-			
+				embedding = model(face1)
+				embedding = embedding.detach().numpy()[0]
+				embedding = vec_preprocessing(embedding)
+				
+				label = file.split(".")[0]
+				label = label.split("_")[0]
+				known_faces.append(embedding)
+				known_names.append(label)
+				
 
-			### Second augmentation ### 
-			face3 = img_preprocessing(face3)
-			face3 = np.array([face3])
-			face3 = torch.Tensor(face3).reshape(1, CHANNELS, HEIGHT, WIDTH)
+				### Second augmentation ### 
+				face3 = img_preprocessing(face3)
+				face3 = np.array([face3])
+				face3 = torch.Tensor(face3).reshape(1, CHANNELS, HEIGHT, WIDTH)
 
-			embedding = model(face3)
-			embedding = embedding.detach().numpy()[0]
-			embedding = vec_preprocessing(embedding)
+				embedding = model(face3)
+				embedding = embedding.detach().numpy()[0]
+				embedding = vec_preprocessing(embedding)
 
-			label = file.split(".")[0]
-			label = label.split("_")[0]
-			known_faces.append(embedding)
-			known_names.append(label)
+				label = file.split(".")[0]
+				label = label.split("_")[0]
+				known_faces.append(embedding)
+				known_names.append(label)
+
+	pickle.dump(known_faces, open(FACE_FILE_HEADER, 'wb'))
+	pickle.dump(known_names, open(LABL_FILE_HEADER, 'wb'))
+else:
+	known_faces = pickle.load(open(FACE_FILE_HEADER, 'rb'))
+	known_names = pickle.load(open(LABL_FILE_HEADER, 'rb'))
 
 
 known_faces = np.array(known_faces)
 known_names = np.array(known_names)
+clf.fit(known_faces, known_names)
 
 print(known_names)
 
@@ -272,7 +289,7 @@ while(True):
 			face_locations.append((startX, startY, endX, endY))
 
 			face = frame[max(startY,0):min(endY,H), max(startX,0):min(endX,W)]
-			label, point = recognize(face, tolerance = 0.6)
+			label, point = recognize(face, tolerance = 0.3)
 			face_names.append(label)
 
 			ax.scatter3D(point[:,0], point[:,1], point[:,2], color='brown', alpha=0.3)
